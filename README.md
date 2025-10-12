@@ -1,3 +1,6 @@
+[![Go Reference](https://pkg.go.dev/badge/github.com/synaptor/pgxschema.svg)](https://pkg.go.dev/github.com/synaptor/pgxschema)
+[![Build Status](https://github.com/synaptor/pgxschema/actions/workflows/ci.yml/badge.svg)](https://github.com/synaptor/pgxschema/actions/workflows/ci.yml)
+
 # PGX Schema Migration Library
 
 A Go library for managing Postgres database schemas with a focus on rollout safety and backwards/forwards data compatibility.
@@ -60,7 +63,7 @@ func main() {
                 Indexes: []*pgxschema.IndexSchema{
                     // Single-column non-unique index
                     {Columns: []string{"user_id"}},
-                    
+
                     // Multi-column non-unique index
                     {Columns: []string{"user_id", "created_at"}},
                 },
