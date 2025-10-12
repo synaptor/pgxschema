@@ -30,17 +30,39 @@ func main() {
             {
                 Name: "users",
                 Columns: []*pgxschema.ColumnSchema{
-                    {Name: "id", Type: pgxschema.ColumnTypeSerial, PrimaryKey: true},
-                    {Name: "name", Type: pgxschema.ColumnTypeVarchar, Length: 100},
-                    {Name: "email", Type: pgxschema.ColumnTypeVarchar, Length: 100},
+                    {Name: "auth_provider", Type: pgxschema.ColumnTypeVarchar, Length: 50, Nullable: false},
+                    {Name: "id", Type: pgxschema.ColumnTypeVarchar, Length: 50, Nullable: false},
+                    {Name: "name", Type: pgxschema.ColumnTypeVarchar, Length: 100, Nullable: false},
+                    {Name: "email", Type: pgxschema.ColumnTypeVarchar, Length: 255, Nullable: false},
+                },
+
+                // Multi-column primary key
+                PrimaryKey: []string{"auth_provider", "id"},
+
+                Indexes: []*pgxschema.IndexSchema{
+                    // Single-column unique index
+                    {Columns: []string{"email"}, Unique: true},
                 },
             },
             {
                 Name: "posts",
                 Columns: []*pgxschema.ColumnSchema{
-                    {Name: "id", Type: pgxschema.ColumnTypeSerial, PrimaryKey: true},
-                    {Name: "user_id", Type: pgxschema.ColumnTypeInt},
-                    {Name: "content", Type: pgxschema.ColumnTypeText},
+                    {Name: "id", Type: pgxschema.ColumnTypeSerial, Nullable: false},
+                    {Name: "user_id", Type: pgxschema.ColumnTypeInteger, Nullable: false},
+                    {Name: "title", Type: pgxschema.ColumnTypeVarchar, Length: 200, Nullable: false},
+                    {Name: "content", Type: pgxschema.ColumnTypeText, Nullable: true},
+                    {Name: "created_at", Type: pgxschema.ColumnTypeTimestamp, Nullable: false},
+                },
+
+                // Single-column primary key
+                PrimaryKey: []string{"id"},
+
+                Indexes: []*pgxschema.IndexSchema{
+                    // Single-column non-unique index
+                    {Columns: []string{"user_id"}},
+                    
+                    // Multi-column non-unique index
+                    {Columns: []string{"user_id", "created_at"}},
                 },
             },
         },
