@@ -1,7 +1,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/synaptor/pgxschema.svg)](https://pkg.go.dev/github.com/synaptor/pgxschema)
 [![Build Status](https://github.com/synaptor/pgxschema/actions/workflows/test.yml/badge.svg)](https://github.com/synaptor/pgxschema/actions/workflows/test.yml)
 
-# PGX Schema Migration Library
+# PGXSchema
 
 A Go library for managing Postgres database schemas with a focus on rollout safety and backwards/forwards data compatibility.
 
