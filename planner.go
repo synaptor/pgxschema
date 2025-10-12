@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// PlanMigration returns the SQL statements needed to migrate from the current schema to the target schema.
+// Plan returns the SQL statements needed to migrate from the current schema to the target schema.
 // First return value is the list of SQL statements to be executed automatically.
 // Second return value is the list of SQL statements that need to be reviewed and executed manually.
-func PlanMigration(current, target *DatabaseSchema) (automated []string, manual []string) {
+func Plan(current, target *DatabaseSchema) (automated []string, manual []string) {
 	// Build maps for quick lookup
 	currentTables := make(map[string]*TableSchema)
 	for _, table := range current.Tables {
@@ -397,18 +397,12 @@ func generateIndexChanges(current, target *TableSchema) (automated []string, man
 
 	for sig, targetIdx := range targetIndexes {
 		currentIdx := currentIndexes[sig]
-		switch {
-		case currentIdx == nil:
+		if currentIdx == nil {
 			if targetIdx.Unique {
 				manual = append(manual, generateCreateIndexSQL(target.Name, targetIdx))
 			} else {
 				automated = append(automated, generateCreateIndexSQL(target.Name, targetIdx))
 			}
-		case reflect.DeepEqual(currentIdx, targetIdx):
-			// No change
-		default:
-			manualDrops = append(manualDrops, fmt.Sprintf("DROP INDEX %s", currentIdx.Name))
-			manual = append(manual, generateCreateIndexSQL(target.Name, targetIdx))
 		}
 	}
 

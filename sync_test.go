@@ -61,6 +61,15 @@ func TestSync(t *testing.T) {
 						t.Fatalf("initial schema mismatch:\n%s", diff)
 					}
 
+					// Compute necessary migrations.
+					automated, manual := Plan(tt.current, tt.target)
+					if diff := cmp.Diff(tt.wantAutomated, automated); diff != "" {
+						t.Fatalf("proposed automated migrations:\n%s", diff)
+					}
+					if diff := cmp.Diff(tt.wantManual, manual); diff != "" {
+						t.Fatalf("proposed manual migrations:\n%s", diff)
+					}
+
 					// Apply migration.
 					if err := Sync(ctx, db.pool, tt.target); err != nil {
 						t.Fatalf("applying migration: %v", err)

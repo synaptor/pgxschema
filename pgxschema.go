@@ -3,60 +3,6 @@
 // Documentation: https://github.com/synaptor/pgxschema
 package pgxschema
 
-import (
-	"regexp"
-)
-
-const (
-	sqlListTables = `
-			SELECT table_name
-			FROM information_schema.tables
-			WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-			ORDER BY table_name
-		`
-
-	sqlListColumns = `
-			SELECT 
-				c.column_name,
-				c.data_type,
-				c.character_maximum_length,
-				c.numeric_precision,
-				c.numeric_scale,
-				c.is_nullable,
-				c.column_default
-			FROM information_schema.columns c
-			WHERE c.table_schema = 'public' 
-				AND c.table_name = $1
-			ORDER BY c.ordinal_position
-		`
-
-	sqlListPrimaryKey = `
-			SELECT a.attname
-			FROM pg_index i
-			JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-			WHERE i.indrelid = $1::regclass
-				AND i.indisprimary
-			ORDER BY array_position(i.indkey, a.attnum)
-		`
-
-	sqlListIndexes = `
-			SELECT 
-				c.relname AS index_name,
-				i.indisunique,
-				a.attname
-			FROM pg_index i
-			JOIN pg_class c ON c.oid = i.indexrelid
-			JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-			WHERE i.indrelid = $1::regclass
-				AND NOT i.indisprimary
-			ORDER BY c.relname, array_position(i.indkey, a.attnum)
-		`
-)
-
-var (
-	reDefaultValueType = regexp.MustCompile(`^(.+)::[a-z_ ]+$`)
-)
-
 // DatabaseSchema represents the schema of a database.
 type DatabaseSchema struct {
 	// Tables in the database.

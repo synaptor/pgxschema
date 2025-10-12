@@ -1210,43 +1210,6 @@ var (
 			},
 		},
 		{
-			name: "change index name only",
-			current: &DatabaseSchema{
-				Tables: []*TableSchema{
-					{
-						Name: "users",
-						Columns: []*ColumnSchema{
-							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
-							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
-						},
-						PrimaryKey: []string{"id"},
-						Indexes: []*IndexSchema{
-							{Name: "users_email_idx", Columns: []string{"email"}},
-						},
-					},
-				},
-			},
-			target: &DatabaseSchema{
-				Tables: []*TableSchema{
-					{
-						Name: "users",
-						Columns: []*ColumnSchema{
-							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
-							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
-						},
-						PrimaryKey: []string{"id"},
-						Indexes: []*IndexSchema{
-							{Name: "custom_index_name", Columns: []string{"email"}},
-						},
-					},
-				},
-			},
-			wantManual: []string{
-				"DROP INDEX users_email_idx",
-				"CREATE INDEX custom_index_name ON users (email)",
-			},
-		},
-		{
 			name: "change index from non-unique to unique",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -1322,13 +1285,44 @@ var (
 				"CREATE UNIQUE INDEX users_username_key ON users (username)",
 			},
 		},
+		{
+			name: "no change in the index",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "backend_type", Type: ColumnTypeVarchar, Length: 50, Nullable: false},
+							{Name: "backend_id", Type: ColumnTypeVarchar, Length: 100, Nullable: false},
+						},
+						Indexes: []*IndexSchema{
+							{Name: "some_existing_name", Columns: []string{"backend_type", "backend_id"}},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "backend_type", Type: ColumnTypeVarchar, Length: 50, Nullable: false},
+							{Name: "backend_id", Type: ColumnTypeVarchar, Length: 100, Nullable: false},
+						},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"backend_type", "backend_id"}},
+						},
+					},
+				},
+			},
+		},
 	}
 )
 
 func TestPlanner(t *testing.T) {
 	for _, tt := range migrationTestCases {
 		t.Run(tt.name, func(t *testing.T) {
-			automated, manual := PlanMigration(tt.current, tt.target)
+			automated, manual := Plan(tt.current, tt.target)
 			if len(tt.wantAutomated) == 0 {
 				tt.wantAutomated = []string(nil)
 			}
