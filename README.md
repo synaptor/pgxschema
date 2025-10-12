@@ -1,5 +1,5 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/synaptor/pgxschema.svg)](https://pkg.go.dev/github.com/synaptor/pgxschema)
-[![Build Status](https://github.com/synaptor/pgxschema/actions/workflows/ci.yml/badge.svg)](https://github.com/synaptor/pgxschema/actions/workflows/test.yml)
+[![Build Status](https://github.com/synaptor/pgxschema/actions/workflows/test.yml/badge.svg)](https://github.com/synaptor/pgxschema/actions/workflows/test.yml)
 
 # PGX Schema Migration Library
 
