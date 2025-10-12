@@ -3,6 +3,7 @@ package pgxschema
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -104,7 +105,7 @@ func Read(ctx context.Context, pool *pgxpool.Pool) (*DatabaseSchema, error) {
 		}
 
 		// Read primary key constraint
-		rows, err = pool.Query(ctx, sqlListPrimaryKey, "public."+tableName)
+		rows, err = pool.Query(ctx, sqlListPrimaryKey, fmt.Sprintf("public.%s", tableName))
 		if err != nil {
 			return nil, fmt.Errorf("reading primary key for table %s: %w", tableName, err)
 		}
@@ -119,6 +120,45 @@ func Read(ctx context.Context, pool *pgxpool.Pool) (*DatabaseSchema, error) {
 		if err := rows.Err(); err != nil {
 			return nil, fmt.Errorf("reading primary key for table %s: %w", tableName, err)
 		}
+
+		rows, err = pool.Query(ctx, sqlListIndexes, fmt.Sprintf("public.%s", tableName))
+		if err != nil {
+			return nil, fmt.Errorf("reading indexes for table %s: %w", tableName, err)
+		}
+		defer rows.Close()
+
+		indexMap := make(map[string]*IndexSchema)
+		for rows.Next() {
+			var indexName string
+			var isUnique bool
+			var columnName string
+			if err := rows.Scan(&indexName, &isUnique, &columnName); err != nil {
+				return nil, fmt.Errorf("scanning index for table %s: %w", tableName, err)
+			}
+
+			if indexMap[indexName] == nil {
+				indexMap[indexName] = &IndexSchema{
+					Name:   indexName,
+					Unique: isUnique,
+				}
+			}
+			indexMap[indexName].Columns = append(indexMap[indexName].Columns, columnName)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("reading indexes for table %s: %w", tableName, err)
+		}
+
+		// Deterministically sort indexes by name
+		indexNames := make([]string, 0, len(indexMap))
+		for name := range indexMap {
+			indexNames = append(indexNames, name)
+		}
+		sort.Strings(indexNames)
+
+		for _, name := range indexNames {
+			table.Indexes = append(table.Indexes, indexMap[name])
+		}
+
 		schema.Tables = append(schema.Tables, table)
 	}
 	return schema, nil

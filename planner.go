@@ -27,7 +27,7 @@ func PlanMigration(current, target *DatabaseSchema) (automated []string, manual 
 
 		if currentTable == nil {
 			// Table doesn't exist, create it
-			automated = append(automated, generateCreateTableSQL(targetTable))
+			automated = append(automated, generateCreateTableStatements(targetTable)...)
 		} else {
 			// Table exists, check for column changes
 			auto, man := generateAlterTableSQL(currentTable, targetTable)
@@ -46,10 +46,8 @@ func PlanMigration(current, target *DatabaseSchema) (automated []string, manual 
 	return automated, manual
 }
 
-// generateCreateTableSQL generates a CREATE TABLE statement
-func generateCreateTableSQL(table *TableSchema) string {
+func generateCreateTableStatements(table *TableSchema) []string {
 	var columns []string
-
 	for _, col := range table.Columns {
 		columns = append(columns, columnDefinition(col))
 	}
@@ -58,7 +56,11 @@ func generateCreateTableSQL(table *TableSchema) string {
 		columns = append(columns, fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(table.PrimaryKey, ", ")))
 	}
 
-	return fmt.Sprintf("CREATE TABLE %s (%s)", table.Name, strings.Join(columns, ", "))
+	automated := []string{fmt.Sprintf("CREATE TABLE %s (%s)", table.Name, strings.Join(columns, ", "))}
+	for _, idx := range table.Indexes {
+		automated = append(automated, generateCreateIndexSQL(table.Name, idx))
+	}
+	return automated
 }
 
 // columnDefinition generates the column definition for a column
@@ -174,6 +176,11 @@ func generateAlterTableSQL(current, target *TableSchema) (automated []string, ma
 			manualActions = append(manualActions, pkActions...)
 		}
 	}
+
+	// Check for index changes
+	idxAuto, idxManual := generateIndexChanges(current, target)
+	automated = append(automated, idxAuto...)
+	manual = append(manual, idxManual...)
 
 	// Generate single ALTER TABLE statements if there are actions
 	if len(automatedActions) > 0 {
@@ -367,4 +374,67 @@ func generatePrimaryKeyActions(tableName string, current, target []string) []str
 	}
 
 	return actions
+}
+
+func generateIndexChanges(current, target *TableSchema) (automated []string, manual []string) {
+	currentIndexes := make(map[string]*IndexSchema)
+	for _, idx := range current.Indexes {
+		currentIndexes[indexSignature(idx)] = idx
+	}
+
+	targetIndexes := make(map[string]*IndexSchema)
+	for _, idx := range target.Indexes {
+		targetIndexes[indexSignature(idx)] = idx
+	}
+
+	var manualDrops []string
+
+	for sig, currentIdx := range currentIndexes {
+		if targetIndexes[sig] == nil {
+			manualDrops = append(manualDrops, fmt.Sprintf("DROP INDEX %s", currentIdx.Name))
+		}
+	}
+
+	for sig, targetIdx := range targetIndexes {
+		currentIdx := currentIndexes[sig]
+		switch {
+		case currentIdx == nil:
+			if targetIdx.Unique {
+				manual = append(manual, generateCreateIndexSQL(target.Name, targetIdx))
+			} else {
+				automated = append(automated, generateCreateIndexSQL(target.Name, targetIdx))
+			}
+		case reflect.DeepEqual(currentIdx, targetIdx):
+			// No change
+		default:
+			manualDrops = append(manualDrops, fmt.Sprintf("DROP INDEX %s", currentIdx.Name))
+			manual = append(manual, generateCreateIndexSQL(target.Name, targetIdx))
+		}
+	}
+
+	return automated, append(manualDrops, manual...)
+}
+
+func indexSignature(idx *IndexSchema) string {
+	unique := ""
+	if idx.Unique {
+		unique = "UNIQUE:"
+	}
+	return unique + strings.Join(idx.Columns, ",")
+}
+
+func generateCreateIndexSQL(tableName string, idx *IndexSchema) string {
+	indexName := idx.Name
+	if indexName == "" {
+		suffix := "idx"
+		if idx.Unique {
+			suffix = "key"
+		}
+		indexName = fmt.Sprintf("%s_%s_%s", tableName, strings.Join(idx.Columns, "_"), suffix)
+	}
+	unique := ""
+	if idx.Unique {
+		unique = "UNIQUE "
+	}
+	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)", unique, indexName, tableName, strings.Join(idx.Columns, ", "))
 }

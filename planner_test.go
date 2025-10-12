@@ -1029,6 +1029,299 @@ var (
 			},
 			wantAutomated: []string{"ALTER TABLE reorder_pk DROP CONSTRAINT reorder_pk_pkey, ADD PRIMARY KEY (second, first)"},
 		},
+		{
+			name:    "create table with index",
+			current: &DatabaseSchema{},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{
+				"CREATE TABLE users (id SERIAL NOT NULL, email VARCHAR(255) NOT NULL, PRIMARY KEY (id))",
+				"CREATE INDEX users_email_idx ON users (email)",
+			},
+		},
+		{
+			name:    "create table with unique index",
+			current: &DatabaseSchema{},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"email"}, Unique: true},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{
+				"CREATE TABLE users (id SERIAL NOT NULL, email VARCHAR(255) NOT NULL, PRIMARY KEY (id))",
+				"CREATE UNIQUE INDEX users_email_key ON users (email)",
+			},
+		},
+		{
+			name: "add index to existing table",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{"CREATE INDEX users_email_idx ON users (email)"},
+		},
+		{
+			name: "add unique index to existing table",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"email"}, Unique: true},
+						},
+					},
+				},
+			},
+			wantManual: []string{"CREATE UNIQUE INDEX users_email_key ON users (email)"},
+		},
+		{
+			name: "drop index from table",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Name: "users_email_idx", Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			wantManual: []string{"DROP INDEX users_email_idx"},
+		},
+		{
+			name: "change index columns",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "first_name", Type: ColumnTypeVarchar, Length: 100, Nullable: false},
+							{Name: "last_name", Type: ColumnTypeVarchar, Length: 100, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Name: "users_first_name_idx", Columns: []string{"first_name"}},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "first_name", Type: ColumnTypeVarchar, Length: 100, Nullable: false},
+							{Name: "last_name", Type: ColumnTypeVarchar, Length: 100, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"first_name", "last_name"}},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{
+				"CREATE INDEX users_first_name_last_name_idx ON users (first_name, last_name)",
+			},
+			wantManual: []string{
+				"DROP INDEX users_first_name_idx",
+			},
+		},
+		{
+			name: "change index name only",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Name: "users_email_idx", Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Name: "custom_index_name", Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			wantManual: []string{
+				"DROP INDEX users_email_idx",
+				"CREATE INDEX custom_index_name ON users (email)",
+			},
+		},
+		{
+			name: "change index from non-unique to unique",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Name: "users_email_idx", Columns: []string{"email"}, Unique: false},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"email"}, Unique: true},
+						},
+					},
+				},
+			},
+			wantManual: []string{
+				"DROP INDEX users_email_idx",
+				"CREATE UNIQUE INDEX users_email_key ON users (email)",
+			},
+		},
+		{
+			name: "multiple indexes",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+							{Name: "username", Type: ColumnTypeVarchar, Length: 50, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+							{Name: "username", Type: ColumnTypeVarchar, Length: 50, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"email"}},
+							{Columns: []string{"username"}, Unique: true},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{
+				"CREATE INDEX users_email_idx ON users (email)",
+			},
+			wantManual: []string{
+				"CREATE UNIQUE INDEX users_username_key ON users (username)",
+			},
+		},
 	}
 )
 

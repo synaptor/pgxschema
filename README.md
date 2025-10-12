@@ -69,6 +69,8 @@ Removing a column, on the contrary, is not safe, because old versions of the app
 which would lead to errors. Similarly, changing a column type in an incompatible way (e.g. changing an integer column to a string column)
 is not safe, because old versions of the application might not be able to parse values anymore.
 
+## Example of a safe migration process
+
 Let's consider a practical example: changing a column `hostport` containing a host:port pair as a string to two separate columns
 `host` and `port`:
 
@@ -86,11 +88,26 @@ As you can see, only at the very last step, when there is no single chance of ro
 we do an unsafe operation of dropping a column.
 
 PGXSchema only automates the safe steps of this process. It will automatically add new columns and tables, add more space to existing
-columns,
-and do other safe operations. All unsafe operations will be logged as warnings to prompt the operator to do them manually when they are sure
-that rollbacks to the old version of the application are not possible.
+columns, and do other safe operations. All unsafe operations will be logged as warnings to prompt the operator to do them manually when
+they are sure that rollbacks to the old version of the application are not possible.
 
-May your queries flow and the pager stay silent.
+## Avoiding schema flapping
+
+Although certain changes (like adding or dropping non-unique indexes) are generally safe in either direction, PGXSchema arbitrarily prefers
+creating them automatically, but dropping them manually. This is to avoid index flapping during progressive rollouts, when different
+versions of the application come and go and would fight otherwise.
+
+## Really? Manual migration steps in 21st century?
+
+Yes. There is no way to reliably detect when it is safe to do an unsafe operation automatically. Most of the ORM frameworks assume
+that the application is deployed in a lockstep, and they do not support progressive rollouts at all. A single `migrate.py` script
+can't be aware of which versions of the application are currently running, and whether it is safe to drop a column or not. Any such
+blind approach would inevitably lead to downtime.
+
+If you feel brave, you can call `Plan` yourself, and execute all the manual steps automatically. But be aware that this can lead to
+downtime or data loss if you are not careful.
+
+May your queries flow and the pager stay silent!
 
 ## License
 

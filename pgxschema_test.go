@@ -23,7 +23,7 @@ func newTestDatabase(t *testing.T, version string, opts ...testcontainers.Contai
 		postgres.BasicWaitStrategies(),
 	}, opts...)
 
-	pgContainer, err := postgres.Run(ctx, fmt.Sprintf("postgres:%s", version), opts...)
+	pgContainer, err := postgres.Run(ctx, fmt.Sprintf("postgres:%s-alpine", version), opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

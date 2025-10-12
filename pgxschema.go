@@ -38,6 +38,19 @@ const (
 				AND i.indisprimary
 			ORDER BY array_position(i.indkey, a.attnum)
 		`
+
+	sqlListIndexes = `
+			SELECT 
+				c.relname AS index_name,
+				i.indisunique,
+				a.attname
+			FROM pg_index i
+			JOIN pg_class c ON c.oid = i.indexrelid
+			JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+			WHERE i.indrelid = $1::regclass
+				AND NOT i.indisprimary
+			ORDER BY c.relname, array_position(i.indkey, a.attnum)
+		`
 )
 
 var (
@@ -60,6 +73,21 @@ type TableSchema struct {
 
 	// Primary key columns (in order).
 	PrimaryKey []string
+
+	// Indexes on the table.
+	Indexes []*IndexSchema
+}
+
+// IndexSchema represents the schema of an index.
+type IndexSchema struct {
+	// Name of the index (optional).
+	Name string
+
+	// Columns in the index (in order).
+	Columns []string
+
+	// Unique indicates if the index enforces uniqueness.
+	Unique bool
 }
 
 // ColumnSchema represents the schema of a column.
