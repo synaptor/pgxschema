@@ -178,11 +178,16 @@ func generateAlterTableSQL(current, target *TableSchema) (automated []string, ma
 	}
 
 	// Check for index changes
-	idxAuto, idxManual := generateIndexChanges(current, target)
-	automated = append(automated, idxAuto...)
-	manual = append(manual, idxManual...)
+	idxAutoDrops, idxAutoCreates, idxManualDrops, idxManualCreates := generateIndexChanges(current, target)
 
-	// Generate single ALTER TABLE statements if there are actions
+	// Order matters:
+	// 1. DROP INDEX (before column drops, since indexes may reference columns being dropped)
+	// 2. ALTER TABLE (add/modify/drop columns)
+	// 3. CREATE INDEX (after column adds, since indexes may reference new columns)
+
+	automated = append(automated, idxAutoDrops...)
+	manual = append(manual, idxManualDrops...)
+
 	if len(automatedActions) > 0 {
 		automated = append(automated, fmt.Sprintf("ALTER TABLE %s %s", target.Name, strings.Join(automatedActions, ", ")))
 	}
@@ -190,6 +195,9 @@ func generateAlterTableSQL(current, target *TableSchema) (automated []string, ma
 	if len(manualActions) > 0 {
 		manual = append(manual, fmt.Sprintf("ALTER TABLE %s %s", target.Name, strings.Join(manualActions, ", ")))
 	}
+
+	automated = append(automated, idxAutoCreates...)
+	manual = append(manual, idxManualCreates...)
 
 	return automated, manual
 }
@@ -376,7 +384,7 @@ func generatePrimaryKeyActions(tableName string, current, target []string) []str
 	return actions
 }
 
-func generateIndexChanges(current, target *TableSchema) (automated []string, manual []string) {
+func generateIndexChanges(current, target *TableSchema) (autoDrops, autoCreates, manualDrops, manualCreates []string) {
 	currentIndexes := make(map[string]*IndexSchema)
 	for _, idx := range current.Indexes {
 		currentIndexes[indexSignature(idx)] = idx
@@ -386,8 +394,6 @@ func generateIndexChanges(current, target *TableSchema) (automated []string, man
 	for _, idx := range target.Indexes {
 		targetIndexes[indexSignature(idx)] = idx
 	}
-
-	var manualDrops []string
 
 	for sig, currentIdx := range currentIndexes {
 		if targetIndexes[sig] == nil {
@@ -399,14 +405,14 @@ func generateIndexChanges(current, target *TableSchema) (automated []string, man
 		currentIdx := currentIndexes[sig]
 		if currentIdx == nil {
 			if targetIdx.Unique {
-				manual = append(manual, generateCreateIndexSQL(target.Name, targetIdx))
+				manualCreates = append(manualCreates, generateCreateIndexSQL(target.Name, targetIdx))
 			} else {
-				automated = append(automated, generateCreateIndexSQL(target.Name, targetIdx))
+				autoCreates = append(autoCreates, generateCreateIndexSQL(target.Name, targetIdx))
 			}
 		}
 	}
 
-	return automated, append(manualDrops, manual...)
+	return autoDrops, autoCreates, manualDrops, manualCreates
 }
 
 func indexSignature(idx *IndexSchema) string {

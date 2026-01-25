@@ -1316,6 +1316,78 @@ var (
 				},
 			},
 		},
+		{
+			name: "add column and index on new column simultaneously",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+							{Name: "new_email", Type: ColumnTypeVarchar, Length: 255, Nullable: true},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Columns: []string{"new_email"}},
+						},
+					},
+				},
+			},
+			// The column must be added BEFORE the index can be created on it
+			wantAutomated: []string{
+				"ALTER TABLE users ADD COLUMN new_email VARCHAR(255)",
+				"CREATE INDEX users_new_email_idx ON users (new_email)",
+			},
+		},
+		{
+			name: "drop column and index on that column simultaneously",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+							{Name: "old_email", Type: ColumnTypeVarchar, Length: 255, Nullable: true},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Name: "users_old_email_idx", Columns: []string{"old_email"}},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			// The index must be dropped BEFORE the column can be dropped
+			wantManual: []string{
+				"DROP INDEX users_old_email_idx",
+				"ALTER TABLE users DROP COLUMN old_email",
+			},
+		},
 	}
 )
 
