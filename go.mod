@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.8
 
 require (
+	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/testcontainers/testcontainers-go v0.39.0

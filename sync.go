@@ -2,8 +2,8 @@ package pgxschema
 
 import (
 	"context"
-	"log/slog"
 
+	"github.com/golang/glog"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,13 +15,13 @@ func Sync(ctx context.Context, pool *pgxpool.Pool, target *DatabaseSchema) error
 	}
 	automated, manual := Plan(current, target)
 	for _, stmt := range automated {
-		slog.InfoContext(ctx, "SQL migration", "statement", stmt)
+		glog.Infof("SQL migration: %s", stmt)
 		if _, err := pool.Exec(ctx, stmt); err != nil {
 			return err
 		}
 	}
 	for _, stmt := range manual {
-		slog.WarnContext(ctx, "Manual migration pending", "statement", stmt)
+		glog.Warningf("Manual migration pending: %s", stmt)
 	}
 	return nil
 }
