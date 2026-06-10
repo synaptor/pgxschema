@@ -62,7 +62,10 @@ func TestSync(t *testing.T) {
 					}
 
 					// Compute necessary migrations.
-					automated, manual := Plan(tt.current, tt.target)
+					automated, manual, err := Plan(tt.current, tt.target)
+					if err != nil {
+						t.Fatalf("Plan error: %v", err)
+					}
 					if diff := cmp.Diff(tt.wantAutomated, automated); diff != "" {
 						t.Fatalf("proposed automated migrations:\n%s", diff)
 					}

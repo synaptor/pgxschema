@@ -13,7 +13,10 @@ func Sync(ctx context.Context, pool *pgxpool.Pool, target *DatabaseSchema) error
 	if err != nil {
 		return err
 	}
-	automated, manual := Plan(current, target)
+	automated, manual, err := Plan(current, target)
+	if err != nil {
+		return err
+	}
 	for _, stmt := range automated {
 		glog.Infof("SQL migration: %s", stmt)
 		if _, err := pool.Exec(ctx, stmt); err != nil {

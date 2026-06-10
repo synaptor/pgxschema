@@ -1,6 +1,7 @@
 package pgxschema
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1394,7 +1395,10 @@ var (
 func TestPlanner(t *testing.T) {
 	for _, tt := range migrationTestCases {
 		t.Run(tt.name, func(t *testing.T) {
-			automated, manual := Plan(tt.current, tt.target)
+			automated, manual, err := Plan(tt.current, tt.target)
+			if err != nil {
+				t.Fatalf("Plan error: %v", err)
+			}
 			if len(tt.wantAutomated) == 0 {
 				tt.wantAutomated = []string(nil)
 			}
@@ -1410,3 +1414,90 @@ func TestPlanner(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanForbiddenColumns(t *testing.T) {
+	tests := []struct {
+		name        string
+		current     *DatabaseSchema
+		target      *DatabaseSchema
+		wantErrCol  string // empty means no error expected
+	}{
+		{
+			name: "forbidden column present in db",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:    "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial},
+							{Name: "legacy_token", Type: ColumnTypeText},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:             "users",
+						Columns:          []*ColumnSchema{{Name: "id", Type: ColumnTypeSerial}},
+						ForbiddenColumns: []string{"legacy_token"},
+					},
+				},
+			},
+			wantErrCol: "legacy_token",
+		},
+		{
+			name: "forbidden column not present in db",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:    "users",
+						Columns: []*ColumnSchema{{Name: "id", Type: ColumnTypeSerial}},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:             "users",
+						Columns:          []*ColumnSchema{{Name: "id", Type: ColumnTypeSerial}},
+						ForbiddenColumns: []string{"legacy_token"},
+					},
+				},
+			},
+		},
+		{
+			name:    "forbidden column on new table is ignored",
+			current: &DatabaseSchema{},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:             "users",
+						Columns:          []*ColumnSchema{{Name: "id", Type: ColumnTypeSerial}},
+						ForbiddenColumns: []string{"legacy_token"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := Plan(tt.current, tt.target)
+			if tt.wantErrCol == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("expected error for column %q, got nil", tt.wantErrCol)
+				}
+				wantSubstr := tt.wantErrCol
+				if !strings.Contains(err.Error(), wantSubstr) {
+					t.Errorf("error %q does not mention column %q", err.Error(), wantSubstr)
+				}
+			}
+		})
+	}
+}
+

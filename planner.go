@@ -9,7 +9,7 @@ import (
 // Plan returns the SQL statements needed to migrate from the current schema to the target schema.
 // First return value is the list of SQL statements to be executed automatically.
 // Second return value is the list of SQL statements that need to be reviewed and executed manually.
-func Plan(current, target *DatabaseSchema) (automated []string, manual []string) {
+func Plan(current, target *DatabaseSchema) (automated []string, manual []string, err error) {
 	// Build maps for quick lookup
 	currentTables := make(map[string]*TableSchema)
 	for _, table := range current.Tables {
@@ -29,6 +29,17 @@ func Plan(current, target *DatabaseSchema) (automated []string, manual []string)
 			// Table doesn't exist, create it
 			automated = append(automated, generateCreateTableStatements(targetTable)...)
 		} else {
+			// Check for forbidden columns before planning any changes
+			forbidden := make(map[string]bool, len(targetTable.ForbiddenColumns))
+			for _, col := range targetTable.ForbiddenColumns {
+				forbidden[col] = true
+			}
+			for _, col := range currentTable.Columns {
+				if forbidden[col.Name] {
+					return nil, nil, fmt.Errorf("table %q contains forbidden column %q and can't be safely upgraded", targetTable.Name, col.Name)
+				}
+			}
+
 			// Table exists, check for column changes
 			auto, man := generateAlterTableSQL(currentTable, targetTable)
 			automated = append(automated, auto...)
@@ -43,7 +54,7 @@ func Plan(current, target *DatabaseSchema) (automated []string, manual []string)
 		}
 	}
 
-	return automated, manual
+	return automated, manual, nil
 }
 
 func generateCreateTableStatements(table *TableSchema) []string {

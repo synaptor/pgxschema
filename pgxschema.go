@@ -22,6 +22,10 @@ type TableSchema struct {
 
 	// Indexes on the table.
 	Indexes []*IndexSchema
+
+	// ForbiddenColumns are column names that must not exist in the table when syncing.
+	// If any of these columns are present in the database, Sync and Plan will return an error.
+	ForbiddenColumns []string
 }
 
 // IndexSchema represents the schema of an index.
