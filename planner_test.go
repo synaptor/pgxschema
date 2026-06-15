@@ -16,12 +16,12 @@ var (
 		wantManual    []string
 	}{
 		{
-			name:    "empty to empty",
+			name:    "empty",
 			current: &DatabaseSchema{},
 			target:  &DatabaseSchema{},
 		},
 		{
-			name:    "create new table",
+			name:    "create table",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -38,7 +38,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE users (id SERIAL NOT NULL, name VARCHAR(100) NOT NULL, PRIMARY KEY (id))"},
 		},
 		{
-			name: "multiple alter actions merged",
+			name: "merge alters",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -65,7 +65,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE users ALTER COLUMN name TYPE VARCHAR(100), ADD COLUMN email VARCHAR(255) NOT NULL"},
 		},
 		{
-			name: "manual and automated actions separated",
+			name: "split manual auto",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -109,7 +109,7 @@ var (
 			wantManual: []string{"DROP TABLE old_table"},
 		},
 		{
-			name:    "create multiple tables",
+			name:    "create multi table",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -135,7 +135,7 @@ var (
 			},
 		},
 		{
-			name: "safe type expansion - varchar to text",
+			name: "varchar to text",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -159,7 +159,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE articles ALTER COLUMN content TYPE TEXT"},
 		},
 		{
-			name: "safe type expansion - integer to numeric",
+			name: "int to numeric",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -183,7 +183,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE prices ALTER COLUMN amount TYPE NUMERIC(10, 2)"},
 		},
 		{
-			name: "unsafe type change - text to varchar",
+			name: "text to varchar unsafe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -207,7 +207,7 @@ var (
 			wantManual: []string{"ALTER TABLE articles ALTER COLUMN content TYPE VARCHAR(1000)"},
 		},
 		{
-			name: "safe length increase",
+			name: "length increase",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -231,7 +231,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE users ALTER COLUMN email TYPE VARCHAR(255)"},
 		},
 		{
-			name: "unsafe length decrease",
+			name: "length decrease unsafe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -255,7 +255,7 @@ var (
 			wantManual: []string{"ALTER TABLE users ALTER COLUMN code TYPE VARCHAR(50)"},
 		},
 		{
-			name: "safe nullable change - NOT NULL to NULL",
+			name: "nullify column",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -279,7 +279,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE users ALTER COLUMN phone DROP NOT NULL"},
 		},
 		{
-			name: "unsafe nullable change - NULL to NOT NULL",
+			name: "not null unsafe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -303,7 +303,7 @@ var (
 			wantManual: []string{"ALTER TABLE users ALTER COLUMN phone SET NOT NULL"},
 		},
 		{
-			name: "add default value",
+			name: "add default",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -327,7 +327,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active'"},
 		},
 		{
-			name: "remove default value",
+			name: "remove default",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -351,7 +351,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE users ALTER COLUMN status DROP DEFAULT"},
 		},
 		{
-			name: "change default value",
+			name: "change default",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -375,7 +375,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE users ALTER COLUMN status SET DEFAULT 'pending'"},
 		},
 		{
-			name: "multiple column changes with type, nullable, and default",
+			name: "col type null default",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -399,7 +399,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE users ALTER COLUMN bio TYPE TEXT, ALTER COLUMN bio DROP NOT NULL, ALTER COLUMN bio DROP DEFAULT"},
 		},
 		{
-			name:    "all column types",
+			name:    "all col types",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -424,7 +424,7 @@ var (
 			},
 		},
 		{
-			name:    "composite primary key",
+			name:    "composite pk",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -441,7 +441,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE user_roles (user_id INTEGER NOT NULL, role_id INTEGER NOT NULL, PRIMARY KEY (user_id, role_id))"},
 		},
 		{
-			name: "no changes needed",
+			name: "no change",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -468,7 +468,7 @@ var (
 			},
 		},
 		{
-			name: "precision increase is safe",
+			name: "precision increase",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -492,7 +492,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE prices ALTER COLUMN amount TYPE NUMERIC(10, 4)"},
 		},
 		{
-			name: "precision decrease is unsafe",
+			name: "precision decrease unsafe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -516,7 +516,7 @@ var (
 			wantManual: []string{"ALTER TABLE prices ALTER COLUMN amount TYPE NUMERIC(10, 2)"},
 		},
 		{
-			name: "timezone change is unsafe",
+			name: "tz change unsafe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -540,7 +540,7 @@ var (
 			wantManual: []string{"ALTER TABLE events ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE"},
 		},
 		{
-			name: "mixed safe and unsafe changes across multiple tables",
+			name: "mixed safe unsafe tables",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -584,7 +584,7 @@ var (
 			},
 		},
 		{
-			name: "unsafe primary key change",
+			name: "pk change unsafe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -610,7 +610,7 @@ var (
 			wantManual: []string{"ALTER TABLE items DROP CONSTRAINT items_pkey"},
 		},
 		{
-			name: "add column with all attributes",
+			name: "add col all attrs",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -637,7 +637,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE products ADD COLUMN price NUMERIC(10, 2) NOT NULL DEFAULT 0"},
 		},
 		{
-			name:    "numeric without precision",
+			name:    "numeric no precision",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -652,7 +652,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE values (amount NUMERIC(10) NOT NULL)"},
 		},
 		{
-			name:    "numeric without length or precision",
+			name:    "numeric bare",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -667,7 +667,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE values (amount NUMERIC NOT NULL)"},
 		},
 		{
-			name:    "varchar without length",
+			name:    "varchar bare",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -682,7 +682,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE items (name VARCHAR NOT NULL)"},
 		},
 		{
-			name:    "empty table without columns",
+			name:    "empty table",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -694,7 +694,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE empty ()"},
 		},
 		{
-			name: "multiple tables with mixed operations",
+			name: "multi table mixed ops",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -747,7 +747,7 @@ var (
 			wantManual: []string{"DROP TABLE to_be_dropped"},
 		},
 		{
-			name:    "column with nullable and default",
+			name:    "col null and default",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -762,7 +762,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE configs (enabled BOOLEAN DEFAULT false)"},
 		},
 		{
-			name: "only default change safe",
+			name: "default only change",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -786,7 +786,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE settings ALTER COLUMN timeout SET DEFAULT 60"},
 		},
 		{
-			name: "length increase with same type",
+			name: "length increase same type",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -810,7 +810,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE data ALTER COLUMN code TYPE VARCHAR(20)"},
 		},
 		{
-			name: "numeric length increase with same precision",
+			name: "numeric len same prec",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -834,7 +834,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE finances ALTER COLUMN balance TYPE NUMERIC(15, 2)"},
 		},
 		{
-			name: "reorder primary key columns - safe",
+			name: "pk reorder safe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -862,7 +862,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE user_roles DROP CONSTRAINT user_roles_pkey, ADD PRIMARY KEY (role_id, user_id)"},
 		},
 		{
-			name: "add column to primary key",
+			name: "add col to pk",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -890,7 +890,7 @@ var (
 			wantManual: []string{"ALTER TABLE events DROP CONSTRAINT events_pkey, ADD PRIMARY KEY (id, timestamp)"},
 		},
 		{
-			name: "remove column from primary key",
+			name: "remove col from pk",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -918,7 +918,7 @@ var (
 			wantManual: []string{"ALTER TABLE orders DROP CONSTRAINT orders_pkey, ADD PRIMARY KEY (order_id)"},
 		},
 		{
-			name: "change primary key to different columns",
+			name: "change pk columns",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -946,7 +946,7 @@ var (
 			wantManual: []string{"ALTER TABLE products DROP CONSTRAINT products_pkey, ADD PRIMARY KEY (sku)"},
 		},
 		{
-			name: "add primary key to table without one",
+			name: "add pk",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -973,7 +973,7 @@ var (
 			wantManual: []string{"ALTER TABLE logs ADD PRIMARY KEY (id)"},
 		},
 		{
-			name: "multi-column primary key with column order change and addition",
+			name: "pk reorder and add",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1003,7 +1003,7 @@ var (
 			wantManual: []string{"ALTER TABLE composite_pk DROP CONSTRAINT composite_pk_pkey, ADD PRIMARY KEY (col_b, col_a, col_c)"},
 		},
 		{
-			name: "simple reorder of primary key columns",
+			name: "pk reorder simple",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1031,7 +1031,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE reorder_pk DROP CONSTRAINT reorder_pk_pkey, ADD PRIMARY KEY (second, first)"},
 		},
 		{
-			name:    "create table with index",
+			name:    "create table with idx",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -1054,7 +1054,7 @@ var (
 			},
 		},
 		{
-			name:    "create table with unique index",
+			name:    "create table unique idx",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -1077,7 +1077,7 @@ var (
 			},
 		},
 		{
-			name: "add index to existing table",
+			name: "add idx",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1108,7 +1108,7 @@ var (
 			wantAutomated: []string{"CREATE INDEX users_email_idx ON users (email)"},
 		},
 		{
-			name: "add unique index to existing table",
+			name: "add unique idx",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1139,7 +1139,7 @@ var (
 			wantManual: []string{"CREATE UNIQUE INDEX users_email_key ON users (email)"},
 		},
 		{
-			name: "drop index from table",
+			name: "drop idx",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1170,7 +1170,7 @@ var (
 			wantManual: []string{"DROP INDEX users_email_idx"},
 		},
 		{
-			name: "change index columns",
+			name: "change idx cols",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1211,7 +1211,7 @@ var (
 			},
 		},
 		{
-			name: "change index from non-unique to unique",
+			name: "idx to unique",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1248,7 +1248,7 @@ var (
 			},
 		},
 		{
-			name: "multiple indexes",
+			name: "multi idx",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1287,7 +1287,7 @@ var (
 			},
 		},
 		{
-			name: "no change in the index",
+			name: "idx no change",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1318,7 +1318,7 @@ var (
 			},
 		},
 		{
-			name: "add column and index on new column simultaneously",
+			name: "add col and idx",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1354,7 +1354,7 @@ var (
 			},
 		},
 		{
-			name: "drop column and index on that column simultaneously",
+			name: "drop col and idx",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1390,7 +1390,7 @@ var (
 			},
 		},
 		{
-			name:    "create table with array columns",
+			name:    "create array table",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -1407,7 +1407,7 @@ var (
 			wantAutomated: []string{"CREATE TABLE things (tags TEXT[], scores INTEGER[], flags BOOLEAN[])"},
 		},
 		{
-			name: "add array column to existing table",
+			name: "add array col",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1430,7 +1430,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE things ADD COLUMN tags TEXT[]"},
 		},
 		{
-			name: "safe type expansion - integer array to numeric array",
+			name: "int array to numeric",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1450,7 +1450,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE things ALTER COLUMN vals TYPE NUMERIC[]"},
 		},
 		{
-			name: "safe type expansion - varchar array to text array",
+			name: "varchar array to text",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1470,7 +1470,7 @@ var (
 			wantAutomated: []string{"ALTER TABLE things ALTER COLUMN labels TYPE TEXT[]"},
 		},
 		{
-			name: "no changes needed - numeric array with precision and scale",
+			name: "numeric array no change",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{Name: "things", Columns: []*ColumnSchema{{Name: "vals", Type: ColumnTypeNumeric, Length: 10, Precision: 2, ArrayDims: 1, Nullable: true}}},
@@ -1483,7 +1483,7 @@ var (
 			},
 		},
 		{
-			name: "unsafe - scalar to array",
+			name: "scalar to array unsafe",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{Name: "things", Columns: []*ColumnSchema{{Name: "val", Type: ColumnTypeInteger, Nullable: true}}},
@@ -1530,7 +1530,7 @@ func TestPlanForbiddenColumns(t *testing.T) {
 		wantErrCol string // empty means no error expected
 	}{
 		{
-			name: "forbidden column present in db",
+			name: "forbidden col present",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1554,7 +1554,7 @@ func TestPlanForbiddenColumns(t *testing.T) {
 			wantErrCol: "legacy_token",
 		},
 		{
-			name: "forbidden column not present in db",
+			name: "forbidden col absent",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
@@ -1574,7 +1574,7 @@ func TestPlanForbiddenColumns(t *testing.T) {
 			},
 		},
 		{
-			name:    "forbidden column on new table is ignored",
+			name:    "forbidden col ignored",
 			current: &DatabaseSchema{},
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -1616,7 +1616,7 @@ func TestPlanArrayValidation(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "ArrayDims > 1 is rejected",
+			name: "array dims gt1 rejected",
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{Name: "t", Columns: []*ColumnSchema{{Name: "x", Type: ColumnTypeText, ArrayDims: 2}}},
@@ -1625,7 +1625,7 @@ func TestPlanArrayValidation(t *testing.T) {
 			wantErr: "ArrayDims must be 0 or 1",
 		},
 		{
-			name: "ArrayDims < 0 is rejected",
+			name: "array dims lt0 rejected",
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{Name: "t", Columns: []*ColumnSchema{{Name: "x", Type: ColumnTypeText, ArrayDims: -1}}},
@@ -1634,7 +1634,7 @@ func TestPlanArrayValidation(t *testing.T) {
 			wantErr: "ArrayDims must be 0 or 1",
 		},
 		{
-			name: "serial array is rejected",
+			name: "serial array rejected",
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{Name: "t", Columns: []*ColumnSchema{{Name: "x", Type: ColumnTypeSerial, ArrayDims: 1}}},
@@ -1643,7 +1643,7 @@ func TestPlanArrayValidation(t *testing.T) {
 			wantErr: "arrays of serial type are not supported",
 		},
 		{
-			name: "array to scalar is impossible",
+			name: "array to scalar impossible",
 			target: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{Name: "things", Columns: []*ColumnSchema{{Name: "val", Type: ColumnTypeText, Nullable: true}}},
