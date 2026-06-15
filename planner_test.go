@@ -1389,6 +1389,113 @@ var (
 				"ALTER TABLE users DROP COLUMN old_email",
 			},
 		},
+		{
+			name:    "create table with array columns",
+			current: &DatabaseSchema{},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "things",
+						Columns: []*ColumnSchema{
+							{Name: "tags", Type: ColumnTypeText, ArrayDims: 1, Nullable: true},
+							{Name: "scores", Type: ColumnTypeInteger, ArrayDims: 1, Nullable: true},
+							{Name: "flags", Type: ColumnTypeBoolean, ArrayDims: 1, Nullable: true},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{"CREATE TABLE things (tags TEXT[], scores INTEGER[], flags BOOLEAN[])"},
+		},
+		{
+			name: "add array column to existing table",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:    "things",
+						Columns: []*ColumnSchema{{Name: "id", Type: ColumnTypeSerial, Nullable: false}},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "things",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "tags", Type: ColumnTypeText, ArrayDims: 1, Nullable: true},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{"ALTER TABLE things ADD COLUMN tags TEXT[]"},
+		},
+		{
+			name: "safe type expansion - integer array to numeric array",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:    "things",
+						Columns: []*ColumnSchema{{Name: "vals", Type: ColumnTypeInteger, ArrayDims: 1, Nullable: true}},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:    "things",
+						Columns: []*ColumnSchema{{Name: "vals", Type: ColumnTypeNumeric, ArrayDims: 1, Nullable: true}},
+					},
+				},
+			},
+			wantAutomated: []string{"ALTER TABLE things ALTER COLUMN vals TYPE NUMERIC[]"},
+		},
+		{
+			name: "safe type expansion - varchar array to text array",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:    "things",
+						Columns: []*ColumnSchema{{Name: "labels", Type: ColumnTypeVarchar, Length: 100, ArrayDims: 1, Nullable: true}},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name:    "things",
+						Columns: []*ColumnSchema{{Name: "labels", Type: ColumnTypeText, ArrayDims: 1, Nullable: true}},
+					},
+				},
+			},
+			wantAutomated: []string{"ALTER TABLE things ALTER COLUMN labels TYPE TEXT[]"},
+		},
+		{
+			name: "no changes needed - numeric array with precision and scale",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "things", Columns: []*ColumnSchema{{Name: "vals", Type: ColumnTypeNumeric, Length: 10, Precision: 2, ArrayDims: 1, Nullable: true}}},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "things", Columns: []*ColumnSchema{{Name: "vals", Type: ColumnTypeNumeric, Length: 10, Precision: 2, ArrayDims: 1, Nullable: true}}},
+				},
+			},
+		},
+		{
+			name: "unsafe - scalar to array",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "things", Columns: []*ColumnSchema{{Name: "val", Type: ColumnTypeInteger, Nullable: true}}},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "things", Columns: []*ColumnSchema{{Name: "val", Type: ColumnTypeInteger, ArrayDims: 1, Nullable: true}}},
+				},
+			},
+			wantManual: []string{"ALTER TABLE things ALTER COLUMN val TYPE INTEGER[] USING ARRAY[val]"},
+		},
 	}
 )
 
@@ -1417,17 +1524,17 @@ func TestPlanner(t *testing.T) {
 
 func TestPlanForbiddenColumns(t *testing.T) {
 	tests := []struct {
-		name        string
-		current     *DatabaseSchema
-		target      *DatabaseSchema
-		wantErrCol  string // empty means no error expected
+		name       string
+		current    *DatabaseSchema
+		target     *DatabaseSchema
+		wantErrCol string // empty means no error expected
 	}{
 		{
 			name: "forbidden column present in db",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
 					{
-						Name:    "users",
+						Name: "users",
 						Columns: []*ColumnSchema{
 							{Name: "id", Type: ColumnTypeSerial},
 							{Name: "legacy_token", Type: ColumnTypeText},
@@ -1501,3 +1608,68 @@ func TestPlanForbiddenColumns(t *testing.T) {
 	}
 }
 
+func TestPlanArrayValidation(t *testing.T) {
+	errTests := []struct {
+		name    string
+		current *DatabaseSchema // nil means empty
+		target  *DatabaseSchema
+		wantErr string
+	}{
+		{
+			name: "ArrayDims > 1 is rejected",
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "t", Columns: []*ColumnSchema{{Name: "x", Type: ColumnTypeText, ArrayDims: 2}}},
+				},
+			},
+			wantErr: "ArrayDims must be 0 or 1",
+		},
+		{
+			name: "ArrayDims < 0 is rejected",
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "t", Columns: []*ColumnSchema{{Name: "x", Type: ColumnTypeText, ArrayDims: -1}}},
+				},
+			},
+			wantErr: "ArrayDims must be 0 or 1",
+		},
+		{
+			name: "serial array is rejected",
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "t", Columns: []*ColumnSchema{{Name: "x", Type: ColumnTypeSerial, ArrayDims: 1}}},
+				},
+			},
+			wantErr: "arrays of serial type are not supported",
+		},
+		{
+			name: "array to scalar is impossible",
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "things", Columns: []*ColumnSchema{{Name: "val", Type: ColumnTypeText, Nullable: true}}},
+				},
+			},
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{Name: "things", Columns: []*ColumnSchema{{Name: "val", Type: ColumnTypeText, ArrayDims: 1, Nullable: true}}},
+				},
+			},
+			wantErr: "cannot convert already-array column",
+		},
+	}
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := tt.current
+			if current == nil {
+				current = &DatabaseSchema{}
+			}
+			_, _, err := Plan(current, tt.target)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}

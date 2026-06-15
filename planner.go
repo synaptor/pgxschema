@@ -23,6 +23,15 @@ func Plan(current, target *DatabaseSchema) (automated []string, manual []string,
 
 	// Process each target table
 	for _, targetTable := range target.Tables {
+		for _, col := range targetTable.Columns {
+			if col.ArrayDims < 0 || col.ArrayDims > 1 {
+				return nil, nil, fmt.Errorf("table %q, column %q: ArrayDims must be 0 or 1, got %d", targetTable.Name, col.Name, col.ArrayDims)
+			}
+			if col.ArrayDims == 1 && col.Type == ColumnTypeSerial {
+				return nil, nil, fmt.Errorf("table %q, column %q: arrays of serial type are not supported", targetTable.Name, col.Name)
+			}
+		}
+
 		currentTable := currentTables[targetTable.Name]
 
 		if currentTable == nil {
@@ -41,7 +50,10 @@ func Plan(current, target *DatabaseSchema) (automated []string, manual []string,
 			}
 
 			// Table exists, check for column changes
-			auto, man := generateAlterTableSQL(currentTable, targetTable)
+			auto, man, err := generateAlterTableSQL(currentTable, targetTable)
+			if err != nil {
+				return nil, nil, err
+			}
 			automated = append(automated, auto...)
 			manual = append(manual, man...)
 		}
@@ -80,41 +92,46 @@ func columnDefinition(col *ColumnSchema) string {
 	parts = append(parts, col.Name)
 
 	// Type
+	var typeStr string
 	switch col.Type {
 	case ColumnTypeSerial:
-		parts = append(parts, "SERIAL")
+		typeStr = "SERIAL"
 	case ColumnTypeInteger:
-		parts = append(parts, "INTEGER")
+		typeStr = "INTEGER"
 	case ColumnTypeNumeric:
 		switch {
 		case col.Length > 0 && col.Precision > 0:
-			parts = append(parts, fmt.Sprintf("NUMERIC(%d, %d)", col.Length, col.Precision))
+			typeStr = fmt.Sprintf("NUMERIC(%d, %d)", col.Length, col.Precision)
 		case col.Length > 0:
-			parts = append(parts, fmt.Sprintf("NUMERIC(%d)", col.Length))
+			typeStr = fmt.Sprintf("NUMERIC(%d)", col.Length)
 		default:
-			parts = append(parts, "NUMERIC")
+			typeStr = "NUMERIC"
 		}
 	case ColumnTypeVarchar:
 		if col.Length > 0 {
-			parts = append(parts, fmt.Sprintf("VARCHAR(%d)", col.Length))
+			typeStr = fmt.Sprintf("VARCHAR(%d)", col.Length)
 		} else {
-			parts = append(parts, "VARCHAR")
+			typeStr = "VARCHAR"
 		}
 	case ColumnTypeText:
-		parts = append(parts, "TEXT")
+		typeStr = "TEXT"
 	case ColumnTypeBoolean:
-		parts = append(parts, "BOOLEAN")
+		typeStr = "BOOLEAN"
 	case ColumnTypeTimestamp:
 		if col.WithTimezone {
-			parts = append(parts, "TIMESTAMP WITH TIME ZONE")
+			typeStr = "TIMESTAMP WITH TIME ZONE"
 		} else {
-			parts = append(parts, "TIMESTAMP WITHOUT TIME ZONE")
+			typeStr = "TIMESTAMP WITHOUT TIME ZONE"
 		}
 	case ColumnTypeBytes:
-		parts = append(parts, "BYTEA")
+		typeStr = "BYTEA"
 	default:
-		parts = append(parts, string(col.Type))
+		typeStr = string(col.Type)
 	}
+	if col.ArrayDims == 1 {
+		typeStr += "[]"
+	}
+	parts = append(parts, typeStr)
 
 	// Nullable
 	if !col.Nullable {
@@ -130,7 +147,7 @@ func columnDefinition(col *ColumnSchema) string {
 }
 
 // generateAlterTableSQL generates ALTER TABLE statements for table changes
-func generateAlterTableSQL(current, target *TableSchema) (automated []string, manual []string) {
+func generateAlterTableSQL(current, target *TableSchema) (automated []string, manual []string, err error) {
 	// Build column maps
 	currentColumns := make(map[string]*ColumnSchema)
 	for _, col := range current.Columns {
@@ -158,6 +175,9 @@ func generateAlterTableSQL(current, target *TableSchema) (automated []string, ma
 			change := columnChanged(currentCol, targetCol)
 			if change == changeNone {
 				continue
+			}
+			if change == changeArray {
+				return nil, nil, fmt.Errorf("table %q, column %q: cannot convert already-array column", target.Name, targetCol.Name)
 			}
 
 			actions := columnAlterActions(currentCol, targetCol)
@@ -210,7 +230,7 @@ func generateAlterTableSQL(current, target *TableSchema) (automated []string, ma
 	automated = append(automated, idxAutoCreates...)
 	manual = append(manual, idxManualCreates...)
 
-	return automated, manual
+	return automated, manual, nil
 }
 
 // columnAlterActions generates the ALTER COLUMN actions for column changes
@@ -218,7 +238,7 @@ func columnAlterActions(current, target *ColumnSchema) []string {
 	var actions []string
 
 	// Type change
-	if current.Type != target.Type || current.Length != target.Length || current.Precision != target.Precision || current.WithTimezone != target.WithTimezone {
+	if current.Type != target.Type || current.Length != target.Length || current.Precision != target.Precision || current.WithTimezone != target.WithTimezone || current.ArrayDims != target.ArrayDims {
 		typeStr := ""
 		switch target.Type {
 		case ColumnTypeInteger:
@@ -252,7 +272,14 @@ func columnAlterActions(current, target *ColumnSchema) []string {
 		default:
 			typeStr = string(target.Type)
 		}
-		actions = append(actions, fmt.Sprintf("ALTER COLUMN %s TYPE %s", target.Name, typeStr))
+		if target.ArrayDims == 1 {
+			typeStr += "[]"
+		}
+		if current.ArrayDims == 0 && target.ArrayDims == 1 {
+			actions = append(actions, fmt.Sprintf("ALTER COLUMN %s TYPE %s USING ARRAY[%s]", target.Name, typeStr, target.Name))
+		} else {
+			actions = append(actions, fmt.Sprintf("ALTER COLUMN %s TYPE %s", target.Name, typeStr))
+		}
 	}
 
 	// Nullable change
@@ -282,6 +309,7 @@ const (
 	changeNone   change = "none"
 	changeSafe   change = "safe"
 	changeUnsafe change = "unsafe"
+	changeArray  change = "array"
 )
 
 // columnChanged determines if a column has changed and whether the change is safe
@@ -292,6 +320,15 @@ func columnChanged(current, target *ColumnSchema) change {
 
 	changed := false
 	typeChanged := false
+
+	// Scalar → array is unsafe but possible (caller emits USING ARRAY[col]).
+	// Array → scalar has no meaningful automatic conversion.
+	if current.ArrayDims != target.ArrayDims {
+		if current.ArrayDims != 0 {
+			return changeArray
+		}
+		return changeUnsafe
+	}
 
 	// Type changes - only allow safe expansions
 	if current.Type != target.Type {

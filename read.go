@@ -19,16 +19,22 @@ const (
 		`
 
 	sqlListColumns = `
-			SELECT 
+			SELECT
 				c.column_name,
 				c.data_type,
+				c.udt_name,
 				c.character_maximum_length,
 				c.numeric_precision,
 				c.numeric_scale,
 				c.is_nullable,
-				c.column_default
+				c.column_default,
+				a.atttypmod
 			FROM information_schema.columns c
-			WHERE c.table_schema = 'public' 
+			JOIN pg_catalog.pg_attribute a
+				ON  a.attrelid = (c.table_schema || '.' || c.table_name)::regclass
+				AND a.attname  = c.column_name
+				AND NOT a.attisdropped
+			WHERE c.table_schema = 'public'
 				AND c.table_name = $1
 			ORDER BY c.ordinal_position
 		`
@@ -92,14 +98,16 @@ func Read(ctx context.Context, pool *pgxpool.Pool) (*DatabaseSchema, error) {
 			var (
 				columnName    string
 				dataType      string
+				udtName       string
 				charMaxLength *int
 				numericPrec   *int
 				numericScale  *int
 				isNullable    string
 				columnDefault *string
+				atttypmod     int
 			)
 
-			if err := rows.Scan(&columnName, &dataType, &charMaxLength, &numericPrec, &numericScale, &isNullable, &columnDefault); err != nil {
+			if err := rows.Scan(&columnName, &dataType, &udtName, &charMaxLength, &numericPrec, &numericScale, &isNullable, &columnDefault, &atttypmod); err != nil {
 				return nil, fmt.Errorf("scanning column for table %s: %w", tableName, err)
 			}
 
@@ -139,6 +147,40 @@ func Read(ctx context.Context, pool *pgxpool.Pool) (*DatabaseSchema, error) {
 				}
 				if numericPrec != nil {
 					col.Length = *numericPrec
+				}
+			case "ARRAY":
+				col.ArrayDims = 1
+				switch udtName {
+				case "_int4":
+					col.Type = ColumnTypeInteger
+				case "_numeric":
+					col.Type = ColumnTypeNumeric
+					// atttypmod stores element precision and scale: encoded = atttypmod - 4,
+					// precision = encoded >> 16, scale = encoded & 0xFFFF.
+					if atttypmod > 0 {
+						encoded := atttypmod - 4
+						col.Length = (encoded >> 16) & 0xFFFF
+						col.Precision = encoded & 0xFFFF
+					}
+				case "_varchar":
+					col.Type = ColumnTypeVarchar
+					// atttypmod stores element length: length = atttypmod - 4.
+					if atttypmod > 0 {
+						col.Length = atttypmod - 4
+					}
+				case "_text":
+					col.Type = ColumnTypeText
+				case "_bool":
+					col.Type = ColumnTypeBoolean
+				case "_timestamp":
+					col.Type = ColumnTypeTimestamp
+				case "_timestamptz":
+					col.Type = ColumnTypeTimestamp
+					col.WithTimezone = true
+				case "_bytea":
+					col.Type = ColumnTypeBytes
+				default:
+					return nil, fmt.Errorf("unsupported array element type %q for column %q in table %q", udtName, columnName, tableName)
 				}
 			default:
 				return nil, fmt.Errorf("unsupported data type %q for column %q in table %q", dataType, columnName, tableName)

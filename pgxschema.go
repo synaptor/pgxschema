@@ -57,6 +57,9 @@ type ColumnSchema struct {
 	// WithTimezone indicates if the column has timezone information (for timestamp types).
 	WithTimezone bool
 
+	// ArrayDims is the number of array dimensions (0 = scalar, 1 = 1-dimensional array).
+	ArrayDims int
+
 	// Nullable indicates if the column is nullable.
 	Nullable bool
 
