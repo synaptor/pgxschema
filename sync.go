@@ -24,7 +24,7 @@ func Sync(ctx context.Context, pool *pgxpool.Pool, target *DatabaseSchema) error
 		}
 	}
 	for _, stmt := range manual {
-		glog.Warningf("Manual migration pending: %s", stmt)
+		glog.Warningf("Manual migration pending: %s;", stmt)
 	}
 	return nil
 }
