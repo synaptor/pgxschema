@@ -15,11 +15,15 @@ import (
 )
 
 func TestSync(t *testing.T) {
-	// Ignore index names when comparing schemas, as they are auto-generated
+	// Ignore index names when comparing schemas, as they are auto-generated.
 	ignoreIndexNames := cmpopts.IgnoreFields(IndexSchema{}, "Name")
+	compareIndexMethod := cmp.Comparer(func(a, b IndexMethod) bool {
+		return normalizeIndexMethod(a) == normalizeIndexMethod(b)
+	})
+	schemaCompareOpts := cmp.Options{ignoreIndexNames, compareIndexMethod}
 
 	// Define which Postgres versions to test against. Test on something old and something new.
-	pgVersions := []string{"13", "18"}
+	pgVersions := []string{"13", "14", "15", "16", "17", "18"}
 	if env := os.Getenv("PGXSCHEMA_PG_VERSIONS"); env != "" {
 		pgVersions = strings.Split(env, ",")
 	}
@@ -93,12 +97,21 @@ func TestSync(t *testing.T) {
 					if err != nil {
 						t.Fatalf("reading initial schema: %v", err)
 					}
-					if diff := cmp.Diff(tt.current, schema, ignoreIndexNames); diff != "" {
+					if diff := cmp.Diff(tt.current, schema, schemaCompareOpts); diff != "" {
 						t.Fatalf("initial schema mismatch:\n%s", diff)
 					}
 
+					// Ensure that diff is empty.
+					automated, manual, err := Plan(schema, tt.current)
+					if err != nil {
+						t.Fatalf("planning unchanged schema: %v", err)
+					}
+					if len(automated) > 0 || len(manual) > 0 {
+						t.Errorf("unchanged plan should be empty, but got %d automated and %d manual migrations", len(automated), len(manual))
+					}
+
 					// Compute necessary migrations.
-					automated, manual, err := Plan(tt.current, tt.target)
+					automated, manual, err = Plan(tt.current, tt.target)
 					if err != nil {
 						t.Fatalf("Plan error: %v", err)
 					}
@@ -126,8 +139,17 @@ func TestSync(t *testing.T) {
 					if err != nil {
 						t.Fatalf("reading final schema: %v", err)
 					}
-					if diff := cmp.Diff(tt.target, schema, ignoreIndexNames); diff != "" {
+					if diff := cmp.Diff(tt.target, schema, schemaCompareOpts); diff != "" {
 						t.Fatalf("final schema mismatch:\n%s", diff)
+					}
+
+					// Ensures that the final diff is empty.
+					automated, manual, err = Plan(schema, tt.target)
+					if err != nil {
+						t.Fatalf("planning final schema: %v", err)
+					}
+					if len(automated) > 0 || len(manual) > 0 {
+						t.Errorf("final plan should be empty, but got %d automated and %d manual migrations", len(automated), len(manual))
 					}
 				})
 			}

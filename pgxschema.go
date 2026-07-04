@@ -28,6 +28,17 @@ type TableSchema struct {
 	ForbiddenColumns []string
 }
 
+// IndexMethod is the access method of an index.
+type IndexMethod string
+
+const (
+	IndexMethodBtree IndexMethod = "btree"
+	IndexMethodHash  IndexMethod = "hash"
+	IndexMethodGin   IndexMethod = "gin"
+	IndexMethodGist  IndexMethod = "gist"
+	IndexMethodBrin  IndexMethod = "brin"
+)
+
 // IndexSchema represents the schema of an index.
 type IndexSchema struct {
 	// Name of the index (optional).
@@ -38,6 +49,9 @@ type IndexSchema struct {
 
 	// Unique indicates if the index enforces uniqueness.
 	Unique bool
+
+	// Method is the index access method. Zero value means btree.
+	Method IndexMethod
 }
 
 // ColumnSchema represents the schema of a column.

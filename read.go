@@ -52,9 +52,11 @@ const (
 			SELECT 
 				c.relname AS index_name,
 				i.indisunique,
+				am.amname,
 				a.attname
 			FROM pg_index i
 			JOIN pg_class c ON c.oid = i.indexrelid
+			JOIN pg_am am ON am.oid = c.relam
 			JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
 			WHERE i.indrelid = $1::regclass
 				AND NOT i.indisprimary
@@ -224,8 +226,9 @@ func Read(ctx context.Context, pool *pgxpool.Pool) (*DatabaseSchema, error) {
 		for rows.Next() {
 			var indexName string
 			var isUnique bool
+			var method string
 			var columnName string
-			if err := rows.Scan(&indexName, &isUnique, &columnName); err != nil {
+			if err := rows.Scan(&indexName, &isUnique, &method, &columnName); err != nil {
 				return nil, fmt.Errorf("scanning index for table %s: %w", tableName, err)
 			}
 
@@ -233,6 +236,7 @@ func Read(ctx context.Context, pool *pgxpool.Pool) (*DatabaseSchema, error) {
 				indexMap[indexName] = &IndexSchema{
 					Name:   indexName,
 					Unique: isUnique,
+					Method: IndexMethod(method),
 				}
 			}
 			indexMap[indexName].Columns = append(indexMap[indexName].Columns, columnName)

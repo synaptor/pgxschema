@@ -435,12 +435,12 @@ func generatePrimaryKeyActions(tableName string, current, target []string) []str
 func generateIndexChanges(current, target *TableSchema) (autoDrops, autoCreates, manualDrops, manualCreates []string) {
 	currentIndexes := make(map[string]*IndexSchema)
 	for _, idx := range current.Indexes {
-		currentIndexes[indexSignature(idx)] = idx
+		currentIndexes[indexSignature(current.Name, idx)] = idx
 	}
 
 	targetIndexes := make(map[string]*IndexSchema)
 	for _, idx := range target.Indexes {
-		targetIndexes[indexSignature(idx)] = idx
+		targetIndexes[indexSignature(target.Name, idx)] = idx
 	}
 
 	for sig, currentIdx := range currentIndexes {
@@ -463,26 +463,38 @@ func generateIndexChanges(current, target *TableSchema) (autoDrops, autoCreates,
 	return autoDrops, autoCreates, manualDrops, manualCreates
 }
 
-func indexSignature(idx *IndexSchema) string {
-	unique := ""
-	if idx.Unique {
-		unique = "UNIQUE:"
+func normalizeIndexMethod(method IndexMethod) IndexMethod {
+	if method == "" {
+		return IndexMethodBtree
 	}
-	return unique + strings.Join(idx.Columns, ",")
+	return method
+}
+
+func resolveIndexName(tableName string, idx *IndexSchema) string {
+	if idx.Name != "" {
+		return idx.Name
+	}
+	suffix := "idx"
+	if idx.Unique {
+		suffix = "key"
+	}
+	method := normalizeIndexMethod(idx.Method)
+	if method == IndexMethodBtree {
+		return fmt.Sprintf("%s_%s_%s", tableName, strings.Join(idx.Columns, "_"), suffix)
+	}
+	return fmt.Sprintf("%s_%s_%s_%s", tableName, strings.Join(idx.Columns, "_"), method, suffix)
+}
+
+func indexSignature(tableName string, idx *IndexSchema) string {
+	return fmt.Sprintf("%s|%s|%v|%s", resolveIndexName(tableName, idx), normalizeIndexMethod(idx.Method), idx.Unique, strings.Join(idx.Columns, ","))
 }
 
 func generateCreateIndexSQL(tableName string, idx *IndexSchema) string {
-	indexName := idx.Name
-	if indexName == "" {
-		suffix := "idx"
-		if idx.Unique {
-			suffix = "key"
-		}
-		indexName = fmt.Sprintf("%s_%s_%s", tableName, strings.Join(idx.Columns, "_"), suffix)
-	}
+	indexName := resolveIndexName(tableName, idx)
+	method := normalizeIndexMethod(idx.Method)
 	unique := ""
 	if idx.Unique {
 		unique = "UNIQUE "
 	}
-	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)", unique, indexName, tableName, strings.Join(idx.Columns, ", "))
+	return fmt.Sprintf("CREATE %sINDEX %s ON %s USING %s (%s)", unique, indexName, tableName, method, strings.Join(idx.Columns, ", "))
 }

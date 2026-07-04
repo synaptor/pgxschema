@@ -94,6 +94,10 @@ Removing a column, on the contrary, is not safe because old versions of the appl
 which would lead to errors. Similarly, changing a column type in an incompatible way (e.g., changing an integer column to a string column)
 is not safe because old versions of the application might not be able to parse the values anymore.
 
+## Assumptions
+
+- The library assumes that the schema is configured only by `pgxschema`. If the schema was changed manually, the behavior is undefined.
+
 ## Example of a safe migration process
 
 Let's consider a practical example: changing a column `hostport` containing a host:port pair as a string to two separate columns

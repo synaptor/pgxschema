@@ -1050,7 +1050,7 @@ var (
 			},
 			wantAutomated: []string{
 				"CREATE TABLE users (id SERIAL NOT NULL, email VARCHAR(255) NOT NULL, PRIMARY KEY (id))",
-				"CREATE INDEX users_email_idx ON users (email)",
+				"CREATE INDEX users_email_idx ON users USING btree (email)",
 			},
 		},
 		{
@@ -1073,7 +1073,7 @@ var (
 			},
 			wantAutomated: []string{
 				"CREATE TABLE users (id SERIAL NOT NULL, email VARCHAR(255) NOT NULL, PRIMARY KEY (id))",
-				"CREATE UNIQUE INDEX users_email_key ON users (email)",
+				"CREATE UNIQUE INDEX users_email_key ON users USING btree (email)",
 			},
 		},
 		{
@@ -1105,7 +1105,7 @@ var (
 					},
 				},
 			},
-			wantAutomated: []string{"CREATE INDEX users_email_idx ON users (email)"},
+			wantAutomated: []string{"CREATE INDEX users_email_idx ON users USING btree (email)"},
 		},
 		{
 			name: "add unique idx",
@@ -1136,7 +1136,7 @@ var (
 					},
 				},
 			},
-			wantManual: []string{"CREATE UNIQUE INDEX users_email_key ON users (email)"},
+			wantManual: []string{"CREATE UNIQUE INDEX users_email_key ON users USING btree (email)"},
 		},
 		{
 			name: "drop idx",
@@ -1204,7 +1204,7 @@ var (
 				},
 			},
 			wantAutomated: []string{
-				"CREATE INDEX users_first_name_last_name_idx ON users (first_name, last_name)",
+				"CREATE INDEX users_first_name_last_name_idx ON users USING btree (first_name, last_name)",
 			},
 			wantManual: []string{
 				"DROP INDEX users_first_name_idx",
@@ -1244,7 +1244,7 @@ var (
 			},
 			wantManual: []string{
 				"DROP INDEX users_email_idx",
-				"CREATE UNIQUE INDEX users_email_key ON users (email)",
+				"CREATE UNIQUE INDEX users_email_key ON users USING btree (email)",
 			},
 		},
 		{
@@ -1280,10 +1280,10 @@ var (
 				},
 			},
 			wantAutomated: []string{
-				"CREATE INDEX users_email_idx ON users (email)",
+				"CREATE INDEX users_email_idx ON users USING btree (email)",
 			},
 			wantManual: []string{
-				"CREATE UNIQUE INDEX users_username_key ON users (username)",
+				"CREATE UNIQUE INDEX users_username_key ON users USING btree (username)",
 			},
 		},
 		{
@@ -1297,7 +1297,7 @@ var (
 							{Name: "backend_id", Type: ColumnTypeVarchar, Length: 100, Nullable: false},
 						},
 						Indexes: []*IndexSchema{
-							{Name: "some_existing_name", Columns: []string{"backend_type", "backend_id"}},
+							{Name: "users_backend_type_backend_id_idx", Columns: []string{"backend_type", "backend_id"}},
 						},
 					},
 				},
@@ -1316,6 +1316,72 @@ var (
 					},
 				},
 			},
+		},
+		{
+			name: "add hash idx",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Method: IndexMethodHash, Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{"CREATE INDEX users_email_hash_idx ON users USING hash (email)"},
+		},
+		{
+			name: "change idx method btree to hash",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Name: "users_email_idx", Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "users",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: false},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Method: IndexMethodHash, Columns: []string{"email"}},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{"CREATE INDEX users_email_hash_idx ON users USING hash (email)"},
+			wantManual:    []string{"DROP INDEX users_email_idx"},
 		},
 		{
 			name: "add col and idx",
@@ -1350,7 +1416,7 @@ var (
 			// The column must be added BEFORE the index can be created on it
 			wantAutomated: []string{
 				"ALTER TABLE users ADD COLUMN new_email VARCHAR(255)",
-				"CREATE INDEX users_new_email_idx ON users (new_email)",
+				"CREATE INDEX users_new_email_idx ON users USING btree (new_email)",
 			},
 		},
 		{
@@ -1496,8 +1562,87 @@ var (
 			},
 			wantManual: []string{"ALTER TABLE things ALTER COLUMN val TYPE INTEGER[] USING ARRAY[val]"},
 		},
+		{
+			name:    "all index methods",
+			current: &DatabaseSchema{},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "indexed_items",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "email", Type: ColumnTypeVarchar, Length: 255, Nullable: true},
+							{Name: "code", Type: ColumnTypeVarchar, Length: 50, Nullable: true},
+							{Name: "tags", Type: ColumnTypeText, ArrayDims: 1, Nullable: true},
+							{Name: "created_at", Type: ColumnTypeTimestamp, Nullable: true},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{Method: IndexMethodHash, Columns: []string{"code"}},
+							{Method: IndexMethodBrin, Columns: []string{"created_at"}},
+							{Columns: []string{"email"}},
+							{Method: IndexMethodGin, Columns: []string{"tags"}},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{
+				"CREATE TABLE indexed_items (id SERIAL NOT NULL, email VARCHAR(255), code VARCHAR(50), tags TEXT[], created_at TIMESTAMP WITHOUT TIME ZONE, PRIMARY KEY (id))",
+				"CREATE INDEX indexed_items_code_hash_idx ON indexed_items USING hash (code)",
+				"CREATE INDEX indexed_items_created_at_brin_idx ON indexed_items USING brin (created_at)",
+				"CREATE INDEX indexed_items_email_idx ON indexed_items USING btree (email)",
+				"CREATE INDEX indexed_items_tags_gin_idx ON indexed_items USING gin (tags)",
+			},
+		},
 	}
 )
+
+func TestResolveIndexName(t *testing.T) {
+	tests := []struct {
+		name      string
+		tableName string
+		idx       *IndexSchema
+		want      string
+	}{
+		{
+			name:      "explicit name",
+			tableName: "users",
+			idx:       &IndexSchema{Name: "custom_idx", Columns: []string{"email"}},
+			want:      "custom_idx",
+		},
+		{
+			name:      "btree default",
+			tableName: "users",
+			idx:       &IndexSchema{Columns: []string{"email"}},
+			want:      "users_email_idx",
+		},
+		{
+			name:      "btree unique",
+			tableName: "users",
+			idx:       &IndexSchema{Columns: []string{"email"}, Unique: true},
+			want:      "users_email_key",
+		},
+		{
+			name:      "hash",
+			tableName: "users",
+			idx:       &IndexSchema{Method: IndexMethodHash, Columns: []string{"email"}},
+			want:      "users_email_hash_idx",
+		},
+		{
+			name:      "hash unique",
+			tableName: "users",
+			idx:       &IndexSchema{Method: IndexMethodHash, Columns: []string{"email"}, Unique: true},
+			want:      "users_email_hash_key",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveIndexName(tt.tableName, tt.idx); got != tt.want {
+				t.Errorf("resolveIndexName() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestPlanner(t *testing.T) {
 	for _, tt := range migrationTestCases {
