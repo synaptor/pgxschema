@@ -20,7 +20,16 @@ func TestSync(t *testing.T) {
 	compareIndexMethod := cmp.Comparer(func(a, b IndexMethod) bool {
 		return normalizeIndexMethod(a) == normalizeIndexMethod(b)
 	})
-	schemaCompareOpts := cmp.Options{ignoreIndexNames, compareIndexMethod}
+	compareIndexWhere := cmp.Comparer(func(a, b string) bool {
+		return normalizeIndexWhere(a) == normalizeIndexWhere(b)
+	})
+	schemaCompareOpts := cmp.Options{
+		ignoreIndexNames,
+		compareIndexMethod,
+		cmp.FilterPath(func(p cmp.Path) bool {
+			return p.Last().String() == ".Where"
+		}, compareIndexWhere),
+	}
 
 	// Define which Postgres versions to test against. Test on something old and something new.
 	pgVersions := []string{"13", "14", "15", "16", "17", "18"}

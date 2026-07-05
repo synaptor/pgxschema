@@ -1108,6 +1108,43 @@ var (
 			wantAutomated: []string{"CREATE INDEX users_email_idx ON users USING btree (email)"},
 		},
 		{
+			name: "add partial idx",
+			current: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "queue",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "priority", Type: ColumnTypeInteger, Nullable: false},
+							{Name: "server_id", Type: ColumnTypeInteger, Nullable: true},
+						},
+						PrimaryKey: []string{"id"},
+					},
+				},
+			},
+			target: &DatabaseSchema{
+				Tables: []*TableSchema{
+					{
+						Name: "queue",
+						Columns: []*ColumnSchema{
+							{Name: "id", Type: ColumnTypeSerial, Nullable: false},
+							{Name: "priority", Type: ColumnTypeInteger, Nullable: false},
+							{Name: "server_id", Type: ColumnTypeInteger, Nullable: true},
+						},
+						PrimaryKey: []string{"id"},
+						Indexes: []*IndexSchema{
+							{
+								Name:    "unclaimed_queue_idx",
+								Columns: []string{"priority"},
+								Where:   "(server_id IS NULL)",
+							},
+						},
+					},
+				},
+			},
+			wantAutomated: []string{"CREATE INDEX unclaimed_queue_idx ON queue USING btree (priority) WHERE (server_id IS NULL)"},
+		},
+		{
 			name: "add unique idx",
 			current: &DatabaseSchema{
 				Tables: []*TableSchema{
@@ -1639,6 +1676,24 @@ func TestResolveIndexName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := resolveIndexName(tt.tableName, tt.idx); got != tt.want {
 				t.Errorf("resolveIndexName() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeIndexWhere(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"", ""},
+		{"  (server_id IS NULL)  ", "(server_id is null)"},
+		{"server_id IS NULL AND status IS NOT NULL", "server_id is null and status is not null"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := normalizeIndexWhere(tt.in); got != tt.want {
+				t.Errorf("normalizeIndexWhere(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}

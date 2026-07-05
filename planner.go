@@ -3,6 +3,7 @@ package pgxschema
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 )
 
@@ -29,6 +30,11 @@ func Plan(current, target *DatabaseSchema) (automated []string, manual []string,
 			}
 			if col.ArrayDims == 1 && col.Type == ColumnTypeSerial {
 				return nil, nil, fmt.Errorf("table %q, column %q: arrays of serial type are not supported", targetTable.Name, col.Name)
+			}
+		}
+		for _, idx := range targetTable.Indexes {
+			if idx.Where != "" && idx.Name == "" {
+				return nil, nil, fmt.Errorf("table %q: partial index on (%s) requires an explicit Name", targetTable.Name, strings.Join(idx.Columns, ", "))
 			}
 		}
 
@@ -470,6 +476,14 @@ func normalizeIndexMethod(method IndexMethod) IndexMethod {
 	return method
 }
 
+var reIndexWhereKeyword = regexp.MustCompile(`(?i)\b(AND|OR|NOT|IS|NULL|TRUE|FALSE)\b`)
+
+func normalizeIndexWhere(where string) string {
+	where = strings.TrimSpace(where)
+	where = strings.Join(strings.Fields(where), " ")
+	return reIndexWhereKeyword.ReplaceAllStringFunc(where, strings.ToLower)
+}
+
 func resolveIndexName(tableName string, idx *IndexSchema) string {
 	if idx.Name != "" {
 		return idx.Name
@@ -486,7 +500,7 @@ func resolveIndexName(tableName string, idx *IndexSchema) string {
 }
 
 func indexSignature(tableName string, idx *IndexSchema) string {
-	return fmt.Sprintf("%s|%s|%v|%s", resolveIndexName(tableName, idx), normalizeIndexMethod(idx.Method), idx.Unique, strings.Join(idx.Columns, ","))
+	return fmt.Sprintf("%s|%s|%v|%s|%s", resolveIndexName(tableName, idx), normalizeIndexMethod(idx.Method), idx.Unique, strings.Join(idx.Columns, ","), normalizeIndexWhere(idx.Where))
 }
 
 func generateCreateIndexSQL(tableName string, idx *IndexSchema) string {
@@ -496,5 +510,9 @@ func generateCreateIndexSQL(tableName string, idx *IndexSchema) string {
 	if idx.Unique {
 		unique = "UNIQUE "
 	}
-	return fmt.Sprintf("CREATE %sINDEX %s ON %s USING %s (%s)", unique, indexName, tableName, method, strings.Join(idx.Columns, ", "))
+	where := ""
+	if idx.Where != "" {
+		where = fmt.Sprintf(" WHERE %s", idx.Where)
+	}
+	return fmt.Sprintf("CREATE %sINDEX %s ON %s USING %s (%s)%s", unique, indexName, tableName, method, strings.Join(idx.Columns, ", "), where)
 }

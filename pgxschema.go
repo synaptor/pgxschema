@@ -52,6 +52,11 @@ type IndexSchema struct {
 
 	// Method is the index access method. Zero value means btree.
 	Method IndexMethod
+
+	// Where is the partial-index predicate (SQL expression only, without the WHERE keyword).
+	// Must match pg_get_expr output, e.g. "(server_id IS NULL)".
+	// When non-empty, Name must be set explicitly.
+	Where string
 }
 
 // ColumnSchema represents the schema of a column.

@@ -53,7 +53,8 @@ const (
 				c.relname AS index_name,
 				i.indisunique,
 				am.amname,
-				a.attname
+				a.attname,
+				pg_get_expr(i.indpred, i.indrelid) AS predicate
 			FROM pg_index i
 			JOIN pg_class c ON c.oid = i.indexrelid
 			JOIN pg_am am ON am.oid = c.relam
@@ -228,16 +229,21 @@ func Read(ctx context.Context, pool *pgxpool.Pool) (*DatabaseSchema, error) {
 			var isUnique bool
 			var method string
 			var columnName string
-			if err := rows.Scan(&indexName, &isUnique, &method, &columnName); err != nil {
+			var predicate *string
+			if err := rows.Scan(&indexName, &isUnique, &method, &columnName, &predicate); err != nil {
 				return nil, fmt.Errorf("scanning index for table %s: %w", tableName, err)
 			}
 
 			if indexMap[indexName] == nil {
-				indexMap[indexName] = &IndexSchema{
+				idx := &IndexSchema{
 					Name:   indexName,
 					Unique: isUnique,
 					Method: IndexMethod(method),
 				}
+				if predicate != nil {
+					idx.Where = *predicate
+				}
+				indexMap[indexName] = idx
 			}
 			indexMap[indexName].Columns = append(indexMap[indexName].Columns, columnName)
 		}
